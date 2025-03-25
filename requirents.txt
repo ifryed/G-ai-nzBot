@@ -1,0 +1,4 @@
+customtkinter
+tk
+ollama
+emoji
