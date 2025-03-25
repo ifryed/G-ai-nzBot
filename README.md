@@ -2,6 +2,10 @@
 
 GainzBot is an AI-powered workout assistant designed to help users create personalized workout plans based on their preferences and available equipment. The app provides a chat interface where users can interact with the AI to generate workout routines, track their progress, and save workout histories.
 
+## UI Preview
+
+![GainzBot UI](images/ui_screenshot.png)
+
 ## Features
 
 - **Custom Workout Generation**: Generate workout plans based on user preferences and available equipment.
