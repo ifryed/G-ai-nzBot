@@ -1,7 +1,7 @@
 {
     "Dumbbells": false,
     "Kettlebell": false,
-    "Resistance Bands": true,
+    "Resistance Bands": false,
     "Pull-up Bar": false,
-    "Jump Rope": true
+    "Jump Rope": false
 }

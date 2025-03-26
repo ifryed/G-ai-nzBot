@@ -8,7 +8,19 @@ from datetime import datetime
 import re
 import emoji
 
-EQUIPMENT_FILE = "data/equipment.json"
+import sys
+
+if getattr(sys, 'frozen', False):
+    BASE_DIR = sys._MEIPASS if hasattr(sys, '_MEIPASS') else os.path.dirname(sys.executable)
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+BASE_DIR = os.path.join("GainzBot")
+EQUIPMENT_FILE = os.path.join(BASE_DIR,"data/equipment.json")
+HISTORY_FILE = os.path.join(BASE_DIR,"history/saved_workouts.json")
+
+os.makedirs(os.path.dirname(EQUIPMENT_FILE),exist_ok=True)
+os.makedirs(os.path.dirname(HISTORY_FILE),exist_ok=True)
 
 class WorkoutApp(ctk.CTk):
     def __init__(self,llm_model="mistral-nemo"):
@@ -286,9 +298,7 @@ class WorkoutApp(ctk.CTk):
             "equipment": [eq for eq, var in self.equipment_vars.items() if var.get()]
         }
 
-        save_path = "history/saved_workouts.json"
-
-        if os.path.exists(save_path):
+        if os.path.exists(HISTORY_FILE):
             with open(save_path, "r") as f:
                 all_workouts = json.load(f)
         else:
@@ -305,8 +315,7 @@ class WorkoutApp(ctk.CTk):
         self.append_chat("System", "Workout saved! 💾")
 
     def load_workout_history(self):
-        path = "history/saved_workouts.json"
-        if os.path.exists(path):
+        if os.path.exists(HISTORY_FILE):
             with open(path, "r") as f:
                 self.history = json.load(f)
             self.history_index = len(self.history) - 1
@@ -316,7 +325,7 @@ class WorkoutApp(ctk.CTk):
         workouts_hist = ""
         for hist_n in self.history:
             workouts_hist += f"{hist_n['date']}: {hist_n['workout']}"
-        self.messages[0]['content'].format(workouts_hist)
+        self.messages[0]['content'] = self.messages[0]['content'].format(workouts_hist)
 
     def update_history_display(self):
         self.history_display.configure(state="normal")
@@ -342,6 +351,7 @@ if __name__ == "__main__":
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")  # You can change this
     app = WorkoutApp(
-        llm_model="mistral-small:22b-instruct-2409-q3_K_L"
+        llm_model="mistral-nemo"
+        # llm_model="mistral-small:22b-instruct-2409-q3_K_L"
     )
     app.mainloop()

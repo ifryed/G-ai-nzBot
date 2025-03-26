@@ -1,0 +1,6 @@
+.eggs/
+build/
+dist/
+.DS_Store
+*.spec
+venv/
