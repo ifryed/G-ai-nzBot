@@ -1,0 +1,6 @@
+""""Generate a random workout based on past workouts.
+Create a workout that works on areas that where not worked on last time.
+                          
+Previous workouts
+{}
+"""

@@ -1,5 +1,5 @@
 import customtkinter as ctk
-import tkinter as tk  # add this at the top
+import tkinter as tk 
 
 import ollama
 import json
@@ -10,12 +10,19 @@ import emoji
 
 import sys
 
+from timer import Timer
+
+# Prompts
+BASIC_PROMPT = "src/prompts/basic_workout.txt"
+RANDOM_WO_PROMPT = "src/prompts/random_workout.txt"
+
+# Folders
 if getattr(sys, 'frozen', False):
     BASE_DIR = sys._MEIPASS if hasattr(sys, '_MEIPASS') else os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-BASE_DIR = os.path.join("GainzBot")
+BASE_DIR = os.path.join("GainzBot_data")
 EQUIPMENT_FILE = os.path.join(BASE_DIR,"data/equipment.json")
 HISTORY_FILE = os.path.join(BASE_DIR,"history/saved_workouts.json")
 
@@ -26,10 +33,14 @@ class WorkoutApp(ctk.CTk):
     def __init__(self,llm_model="mistral-nemo"):
         super().__init__()
         self.llm_model = llm_model
-        self.attributes("-topmost", True)
+        # self.attributes("-topmost", True)
         self.title("G(ai)nzBot")
         self.geometry("1150x600")
-
+        
+        self.toggle_topmost_switch = ctk.CTkSwitch(self, text="Always on top", command=self.toggle_topmost)
+        self.toggle_topmost_switch.place(x=20, y=5)  # Adjust x and y for the top-right corner
+        self.toggle_topmost(True)
+        
         # Configure grid layout
         self.grid_columnconfigure(1, weight=1)
         self.grid_rowconfigure(0, weight=1)
@@ -103,12 +114,16 @@ class WorkoutApp(ctk.CTk):
         # Save button
         self.save_button = ctk.CTkButton(self.chat_frame, text="Save Workout", command=self.save_workout)
         self.save_button.grid(row=2, column=0, sticky="ne", padx=20, pady=(5, 10))
+        
+        #  Timer button
+        self.timer_button = ctk.CTkButton(self.chat_frame, text="⏱️", width=40, height=28, command=self.open_timer_window)
+        self.timer_button.grid(row=2, column=0, sticky="s", padx=160, pady=(5, 10))
 
         # Input + send
         self.input_frame = ctk.CTkFrame(self.chat_frame)
         self.input_frame.grid(row=3, column=0, sticky="we", padx=20, pady=(0, 10))
 
-        self.user_input = ctk.CTkEntry(self.input_frame, placeholder_text="Ask for a workout...")
+        self.user_input = ctk.CTkEntry(self.input_frame, placeholder_text="Generate a random workout...")
         self.user_input.bind("<Return>", lambda event: self.send_button.invoke())
         self.user_input.pack(side="left", fill="x", expand=True, padx=(0, 10))
 
@@ -125,21 +140,21 @@ class WorkoutApp(ctk.CTk):
         self.add_eq_button = ctk.CTkButton(self.equipment_controls_frame, text="Add", command=self.add_equipment)
         self.add_eq_button.pack(pady=(5, 2), padx=20)
 
-        self.messages = [{"role":"system","content":"""You are a GYM trainer, you should create workouts that fit the users request. 
-                          Write the name of the exercises names, and the time/reptitions do to it.
-                          Do not explain how to do the exercises unless asked todo so.
-                          Summerize at the end of the workout which muscle groups it worked on and how much in percentage (adds up to 100%).
-                          Use fun Emoji's.
-                          
-                          Look at the previous workouts the user did, generate an workout that complements the last one.
-                          
-                          Previous workouts
-                          {}
-                          """}]
+        self.messages = [{"role":"system","content":open(BASIC_PROMPT,'r').read()}]
         self.last_workout = ""
         self.history = []
         self.history_index = -1
         self.load_workout_history()
+
+    def toggle_topmost(self,state=None):
+        if state is None:
+            state = self.toggle_topmost_switch.get()
+        else:
+            if state:
+                self.toggle_topmost_switch.select()
+            else:
+                self.toggle_topmost_switch.deselect()
+        self.attributes("-topmost", state)
 
     def load_equipment(self):
         if os.path.exists(EQUIPMENT_FILE):
@@ -212,9 +227,15 @@ class WorkoutApp(ctk.CTk):
             self.save_equipment()
 
     def create_model_selection_popup(self):
-        self.model_list = [x['model'] for x in ollama.list()['models']]
-        self.model_var = tk.StringVar(value=self.llm_model[:self.llm_model.find(':')])
-        self.model_menu = tk.OptionMenu(self.chat_frame, self.model_var, *[x[:x.find(':')] for x in self.model_list], command=self.update_model)
+        def shorten_name(name):
+            max_name_len = 25
+            if len(name)> max_name_len:
+                name = name[:max_name_len-4]+"..."
+            return name
+        self.model_list = sorted([x['model'] for x in ollama.list()['models']])
+        display_llm_model = shorten_name(self.llm_model)
+        self.model_var = tk.StringVar(value=display_llm_model)
+        self.model_menu = tk.OptionMenu(self.chat_frame, self.model_var, *[shorten_name(x) for x in self.model_list], command=self.update_model)
         self.model_menu.config(width=15)
         self.model_menu.grid(row=2, column=0, sticky="nw", padx=20, pady=(5, 10))
 
@@ -230,55 +251,58 @@ class WorkoutApp(ctk.CTk):
     def send_message(self):
         user_msg = self.user_input.get()
         if not user_msg:
-            user_msg = "Generate a random workout based on past workouts"
-        if user_msg:
-            self.append_chat("\nYou", user_msg)
-            self.chat_display.configure(state="normal")
-            self.chat_display.insert("end", "\n")
-            self.chat_display.configure(state="disabled")
-            self.user_input.delete(0, 'end')
+            disp_msg = "Generate a random workout based on past workouts"
+            user_msg = open(RANDOM_WO_PROMPT,'r').read().format(self.workouts_hist)
+        else:
+            disp_msg = user_msg
+        
+        self.append_chat("\nYou", disp_msg)
+        self.chat_display.configure(state="normal")
+        self.chat_display.insert("end", "\n")
+        self.chat_display.configure(state="disabled")
+        self.user_input.delete(0, 'end')
 
-            selected_equipment = [eq for eq, var in self.equipment_vars.items() if var.get()]
-            equipment_str = ", ".join(selected_equipment) if selected_equipment else "no equipment"
+        selected_equipment = [eq for eq, var in self.equipment_vars.items() if var.get()]
+        equipment_str = ", ".join(selected_equipment) if selected_equipment else "no equipment"
 
-            self.messages.append({'role':'user','content': 
-                f"Available Equipment for the workout:{equipment_str}\n{user_msg}"})
-                        
-            self.chat_display.configure(state="normal")
-            
-            # Remove the "typing..." text before streaming the actual response.
-            # Assume the typing indicator is on the second-to-last line.
-            typing_line_start = self.chat_display.index("end-2l linestart")
-            typing_line_end = self.chat_display.index("end-2l lineend")
-            self.chat_display.delete(typing_line_start, typing_line_end)
-            # Reinsert "Coach: " at the beginning of that line
-            self.chat_display.insert(typing_line_start, "Coach:\n", ("bold",))
-            
-            # Stream the response token-by-token
-            workout_part = ""
-            for chunk in ollama.chat(self.llm_model, messages=self.messages, stream=True,options={'num_ctx':4000}):
-                if hasattr(chunk, "message") and hasattr(chunk.message, "content"):
-                    chunk_text = emoji.emojize(chunk.message.content, language='alias')
-                    if not hasattr(self, "_bold_open"):
-                        self._bold_open = False
+        self.messages.append({'role':'user','content': 
+            f"Available Equipment for the workout:{equipment_str}\n{user_msg}"})
+                    
+        self.chat_display.configure(state="normal")
+        
+        # Remove the "typing..." text before streaming the actual response.
+        # Assume the typing indicator is on the second-to-last line.
+        typing_line_start = self.chat_display.index("end-2l linestart")
+        typing_line_end = self.chat_display.index("end-2l lineend")
+        self.chat_display.delete(typing_line_start, typing_line_end)
+        # Reinsert "Coach: " at the beginning of that line
+        self.chat_display.insert(typing_line_start, "Coach:\n", ("bold",))
+        
+        # Stream the response token-by-token
+        workout_part = ""
+        for chunk in ollama.chat(self.llm_model, messages=self.messages, stream=True,options={'num_ctx':4000}):
+            if hasattr(chunk, "message") and hasattr(chunk.message, "content"):
+                chunk_text = emoji.emojize(chunk.message.content, language='alias')
+                if not hasattr(self, "_bold_open"):
+                    self._bold_open = False
 
-                    parts = re.split(r"(\*\*)", chunk_text)
-                    for part in parts:
-                        if part == "**":
-                            self._bold_open = not self._bold_open
+                parts = re.split(r"(\*\*)", chunk_text)
+                for part in parts:
+                    if part == "**":
+                        self._bold_open = not self._bold_open
+                    else:
+                        if self._bold_open:
+                            self.chat_display.insert("end", part, ("bold",))
                         else:
-                            if self._bold_open:
-                                self.chat_display.insert("end", part, ("bold",))
-                            else:
-                                self.chat_display.insert("end", part)
-                            workout_part += part
-                            self.chat_display.see("end")
-                            self.update_idletasks()
-                            self.chat_display.update()
-            
-            self.chat_display.insert("end", "\n")
-            self.chat_display.configure(state="disabled")
-            self.last_workout = workout_part  # Save the message for later
+                            self.chat_display.insert("end", part)
+                        workout_part += part
+                        self.chat_display.see("end")
+                        self.update_idletasks()
+                        self.chat_display.update()
+        
+        self.chat_display.insert("end", "\n")
+        self.chat_display.configure(state="disabled")
+        self.last_workout = workout_part  # Save the message for later
 
     def append_chat(self, sender, message):
         self.chat_display.configure(state="normal")
@@ -299,14 +323,14 @@ class WorkoutApp(ctk.CTk):
         }
 
         if os.path.exists(HISTORY_FILE):
-            with open(save_path, "r") as f:
+            with open(HISTORY_FILE, "r") as f:
                 all_workouts = json.load(f)
         else:
             all_workouts = []
 
         all_workouts.append(workout_data)
 
-        with open(save_path, "w") as f:
+        with open(HISTORY_FILE, "w") as f:
             json.dump(all_workouts, f, indent=4)
 
         self.history = all_workouts
@@ -314,18 +338,23 @@ class WorkoutApp(ctk.CTk):
         self.update_history_display()
         self.append_chat("System", "Workout saved! 💾")
 
+    def open_timer_window(self):
+        new_timer = Timer(self)
+        new_timer.update_timer_display()
+
     def load_workout_history(self):
         if os.path.exists(HISTORY_FILE):
-            with open(path, "r") as f:
+            with open(HISTORY_FILE, "r") as f:
                 self.history = json.load(f)
             self.history_index = len(self.history) - 1
             self.update_history_display()
         
         
-        workouts_hist = ""
+        self.workouts_hist = ""
         for hist_n in self.history:
-            workouts_hist += f"{hist_n['date']}: {hist_n['workout']}"
-        self.messages[0]['content'] = self.messages[0]['content'].format(workouts_hist)
+            self.workouts_hist += f"{hist_n['date']}: {hist_n['workout']}"
+        
+        self.messages[0]['content'] = self.messages[0]['content'].format(self.workouts_hist)
 
     def update_history_display(self):
         self.history_display.configure(state="normal")
@@ -348,6 +377,11 @@ class WorkoutApp(ctk.CTk):
             self.update_history_display()
 
 if __name__ == "__main__":
+    if len(list(ollama.list()['models'])) == 0:
+        print('No model, downloading \'Mistral Nemo\'')
+        ollama.pull('mistral-nemo')
+        
+    
     ctk.set_appearance_mode("dark")
     ctk.set_default_color_theme("blue")  # You can change this
     app = WorkoutApp(
